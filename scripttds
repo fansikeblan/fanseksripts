@@ -314,7 +314,7 @@ local function teleportToTarget()
     local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
     local root = character:FindFirstChild("HumanoidRootPart")
     if root then
-        root.CFrame = CFrame.new(756, -28, -3402)
+        root.CFrame = CFrame.new(756, -28, -3.402)
     end
 end
 
