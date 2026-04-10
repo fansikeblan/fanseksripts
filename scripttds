@@ -1,24 +1,28 @@
-if not game:IsLoaded() then game.Loaded:Wait() end
+-- Safe load check (some executors may not expose IsLoaded/Loaded properly)
+local isLoadedFn = game.IsLoaded
+if type(isLoadedFn) == "function" then
+    local ok, loaded = pcall(function()
+        return game:IsLoaded()
+    end)
+    if ok and not loaded then
+        local loadedSignal = game.Loaded
+        if loadedSignal and loadedSignal.Wait then
+            pcall(function()
+                loadedSignal:Wait()
+            end)
+        end
+    end
+end
 
 local coreGui = game:GetService("CoreGui")
-local httpService = game:GetService("HttpService")
-local lighting = game:GetService("Lighting")
 local players = game:GetService("Players")
-local runService = game:GetService("RunService")
-local guiService = game:GetService("GuiService")
-local statsService = game:GetService("Stats")
-local starterGui = game:GetService("StarterGui")
-local teleportService = game:GetService("TeleportService")
 local tweenService = game:GetService("TweenService")
 local userInputService = game:GetService("UserInputService")
 local gameSettings = UserSettings():GetService("UserGameSettings")
 
-local camera = workspace.CurrentCamera
 local localPlayer = players.LocalPlayer
-local mouse = localPlayer:GetMouse()
 local smartBarOpen = true
 local debounce = false
-local checkingForKey = true
 local oldVolume = gameSettings.MasterVolume
 
 local siriusValues = {
@@ -43,29 +47,82 @@ local siriusSettings = {
     },
 }
 
+-- Safe remote runner
+local loadStringFn = loadstring or load
+local function runRemote(url)
+    local ok, src = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if not ok or type(src) ~= "string" then
+        warn("HttpGet failed:", url)
+        return
+    end
+
+    if type(loadStringFn) ~= "function" then
+        warn("loadstring/load is not available in this executor")
+        return
+    end
+
+    local compiled, err = loadStringFn(src)
+    if not compiled then
+        warn("Compile error:", err)
+        return
+    end
+
+    local okRun, runErr = pcall(compiled)
+    if not okRun then
+        warn("Runtime error:", runErr)
+    end
+end
+
 local guiParent = gethui and gethui() or coreGui
 local sirius = guiParent:FindFirstChild("Sirius")
-if sirius then sirius:Destroy() end
+if sirius then
+    sirius:Destroy()
+end
 
-local UI = game:GetObjects("rbxassetid://" .. siriusValues.interfaceAsset)[1]
+local okUI, UI = pcall(function()
+    return game:GetObjects("rbxassetid://" .. siriusValues.interfaceAsset)[1]
+end)
+if not okUI or not UI then
+    warn("Failed to load UI asset:", siriusValues.interfaceAsset)
+    return
+end
+
 UI.Name = siriusValues.siriusName
 UI.Parent = guiParent
 UI.Enabled = false
 UI.DisplayOrder = 100
 
-local notificationContainer = UI.Notifications
-local smartBar = UI.SmartBar
-local toggle = UI.Toggle
-local toastsContainer = UI.Toasts
+local notificationContainer = UI:FindFirstChild("Notifications")
+local smartBar = UI:FindFirstChild("SmartBar")
+local toggle = UI:FindFirstChild("Toggle")
+local toastsContainer = UI:FindFirstChild("Toasts")
+
+if not (notificationContainer and smartBar and toggle and toastsContainer) then
+    warn("UI structure is invalid (SmartBar/Toggle/Notifications/Toasts missing)")
+    return
+end
 
 for _, child in ipairs(UI:GetChildren()) do
-    if child:IsA("Frame") and child.Name ~= "SmartBar" and child.Name ~= "Notifications" and child.Name ~= "Toasts" and child.Name ~= "Toggle" then
+    if child:IsA("Frame")
+        and child.Name ~= "SmartBar"
+        and child.Name ~= "Notifications"
+        and child.Name ~= "Toasts"
+        and child.Name ~= "Toggle" then
         child:Destroy()
     end
 end
 
+if not smartBar:FindFirstChild("Buttons") then
+    warn("SmartBar.Buttons not found")
+    return
+end
+
 for _, btn in ipairs(smartBar.Buttons:GetChildren()) do
-    if btn:IsA("Frame") then btn:Destroy() end
+    if btn:IsA("Frame") then
+        btn:Destroy()
+    end
 end
 
 local buttonContainer = smartBar.Buttons
@@ -179,7 +236,7 @@ local function ensureEggMenu()
     return eggMenuFrame
 end
 
-function addCustomButton(name, config)
+local function addCustomButton(name, config)
     assert(name and type(name) == "string")
     assert(config and type(config) == "table")
     assert(config.image1 and config.image2)
@@ -251,29 +308,49 @@ function addCustomButton(name, config)
     end
 
     interact.MouseButton1Click:Connect(function()
-        if debounce then return end
-        currentState = currentState == 1 and 2 or 1
+        if debounce then
+            return
+        end
+        currentState = (currentState == 1) and 2 or 1
         updateButton()
+
         local scriptToRun = (currentState == 1) and config.script1 or config.script2
         if type(scriptToRun) == "string" then
-            loadstring(scriptToRun)()
+            if type(loadStringFn) == "function" then
+                local f, e = loadStringFn(scriptToRun)
+                if f then
+                    pcall(f)
+                else
+                    warn("Button script compile error:", e)
+                end
+            else
+                warn("loadstring/load not available for string script")
+            end
         elseif type(scriptToRun) == "function" then
-            scriptToRun()
+            local okRun, runErr = pcall(scriptToRun)
+            if not okRun then
+                warn("Button function error:", runErr)
+            end
         end
+
         tweenService:Create(button, TweenInfo.new(0.1), { Size = UDim2.new(0, 32, 0, 32) }):Play()
         task.wait(0.1)
         tweenService:Create(button, TweenInfo.new(0.2), { Size = UDim2.new(0, 36, 0, 36) }):Play()
     end)
 
     interact.MouseEnter:Connect(function()
-        if debounce then return end
+        if debounce then
+            return
+        end
         tweenService:Create(button, TweenInfo.new(0.3), { BackgroundTransparency = 0.2 }):Play()
         tweenService:Create(stroke, TweenInfo.new(0.3), { Transparency = 1 }):Play()
         tweenService:Create(icon, TweenInfo.new(0.2), { ImageTransparency = 0 }):Play()
     end)
 
     interact.MouseLeave:Connect(function()
-        if debounce then return end
+        if debounce then
+            return
+        end
         tweenService:Create(button, TweenInfo.new(0.3), { BackgroundTransparency = 0 }):Play()
         tweenService:Create(stroke, TweenInfo.new(0.3), { Transparency = 0 }):Play()
         tweenService:Create(icon, TweenInfo.new(0.2), { ImageTransparency = 0.5 }):Play()
@@ -298,16 +375,24 @@ local function openSmartBar()
     smartBarOpen = true
     smartBar.Visible = true
     smartBar.BackgroundTransparency = 1
-    smartBar.UIStroke.Transparency = 1
-    smartBar.Shadow.ImageTransparency = 1
+
+    if smartBar:FindFirstChild("UIStroke") then
+        smartBar.UIStroke.Transparency = 1
+    end
+    if smartBar:FindFirstChild("Shadow") then
+        smartBar.Shadow.ImageTransparency = 1
+    end
+
     smartBar.Position = UDim2.new(0.5, 0, 1.05, 0)
     smartBar.Size = UDim2.new(0, 531, 0, 64)
     toggle.Rotation = 180
+
     if checkTools() then
         toggle.Position = UDim2.new(0.5, 0, 1, -68)
     else
         toggle.Position = UDim2.new(0.5, 0, 1, -5)
     end
+
     for _, btn in ipairs(buttonContainer:GetChildren()) do
         if btn:IsA("Frame") then
             btn.BackgroundTransparency = 1
@@ -315,27 +400,60 @@ local function openSmartBar()
             if btn:FindFirstChild("Icon") then btn.Icon.ImageTransparency = 1 end
         end
     end
-    tweenService:Create(smartBar, TweenInfo.new(0.7, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -12) }):Play()
-    tweenService:Create(toastsContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -110) }):Play()
-    tweenService:Create(toggle, TweenInfo.new(0.7, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -85) }):Play()
-    tweenService:Create(smartBar, TweenInfo.new(0.6, Enum.EasingStyle.Quint), { Size = UDim2.new(0, 581, 0, 70) }):Play()
-    tweenService:Create(smartBar, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { BackgroundTransparency = 0 }):Play()
-    tweenService:Create(smartBar.Shadow, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { ImageTransparency = 0.7 }):Play()
-    tweenService:Create(smartBar.UIStroke, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { Transparency = 0.95 }):Play()
-    tweenService:Create(toggle, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { ImageTransparency = 0 }):Play()
+
+    tweenService:Create(smartBar, TweenInfo.new(0.7, Enum.EasingStyle.Quint), {
+        Position = UDim2.new(0.5, 0, 1, -12),
+    }):Play()
+    tweenService:Create(toastsContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quint), {
+        Position = UDim2.new(0.5, 0, 1, -110),
+    }):Play()
+    tweenService:Create(toggle, TweenInfo.new(0.7, Enum.EasingStyle.Quint), {
+        Position = UDim2.new(0.5, 0, 1, -85),
+    }):Play()
+    tweenService:Create(smartBar, TweenInfo.new(0.6, Enum.EasingStyle.Quint), {
+        Size = UDim2.new(0, 581, 0, 70),
+    }):Play()
+    tweenService:Create(smartBar, TweenInfo.new(0.8, Enum.EasingStyle.Quint), {
+        BackgroundTransparency = 0,
+    }):Play()
+
+    if smartBar:FindFirstChild("Shadow") then
+        tweenService:Create(smartBar.Shadow, TweenInfo.new(0.8, Enum.EasingStyle.Quint), {
+            ImageTransparency = 0.7,
+        }):Play()
+    end
+    if smartBar:FindFirstChild("UIStroke") then
+        tweenService:Create(smartBar.UIStroke, TweenInfo.new(0.8, Enum.EasingStyle.Quint), {
+            Transparency = 0.95,
+        }):Play()
+    end
+
+    tweenService:Create(toggle, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+        ImageTransparency = 0,
+    }):Play()
+
     for _, btn in ipairs(buttonContainer:GetChildren()) do
         if btn:IsA("Frame") then
-            tweenService:Create(btn, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { Size = UDim2.new(0, 36, 0, 36) }):Play()
-            tweenService:Create(btn, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { BackgroundTransparency = 0 }):Play()
+            tweenService:Create(btn, TweenInfo.new(0.8, Enum.EasingStyle.Quint), {
+                Size = UDim2.new(0, 36, 0, 36),
+            }):Play()
+            tweenService:Create(btn, TweenInfo.new(0.8, Enum.EasingStyle.Quint), {
+                BackgroundTransparency = 0,
+            }):Play()
             if btn:FindFirstChild("UIStroke") then
-                tweenService:Create(btn.UIStroke, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { Transparency = 0 }):Play()
+                tweenService:Create(btn.UIStroke, TweenInfo.new(0.8, Enum.EasingStyle.Quint), {
+                    Transparency = 0,
+                }):Play()
             end
             if btn:FindFirstChild("Icon") then
-                tweenService:Create(btn.Icon, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { ImageTransparency = 0 }):Play()
+                tweenService:Create(btn.Icon, TweenInfo.new(0.8, Enum.EasingStyle.Quint), {
+                    ImageTransparency = 0,
+                }):Play()
             end
         end
         task.wait(0.03)
     end
+
     task.delay(0.9, function()
         if smartBarOpen then
             for _, btn in ipairs(buttonContainer:GetChildren()) do
@@ -351,33 +469,73 @@ end
 
 local function closeSmartBar()
     smartBarOpen = false
+
     for _, btn in ipairs(buttonContainer:GetChildren()) do
         if btn:IsA("Frame") then
-            tweenService:Create(btn, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { BackgroundTransparency = 1 }):Play()
+            tweenService:Create(btn, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+                BackgroundTransparency = 1,
+            }):Play()
             if btn:FindFirstChild("UIStroke") then
-                tweenService:Create(btn.UIStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { Transparency = 1 }):Play()
+                tweenService:Create(btn.UIStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+                    Transparency = 1,
+                }):Play()
             end
             if btn:FindFirstChild("Icon") then
-                tweenService:Create(btn.Icon, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { ImageTransparency = 1 }):Play()
+                tweenService:Create(btn.Icon, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+                    ImageTransparency = 1,
+                }):Play()
             end
         end
     end
-    tweenService:Create(smartBar, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { BackgroundTransparency = 1 }):Play()
-    tweenService:Create(smartBar.UIStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { Transparency = 1 }):Play()
-    tweenService:Create(smartBar.Shadow, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { ImageTransparency = 1 }):Play()
-    tweenService:Create(smartBar, TweenInfo.new(0.5, Enum.EasingStyle.Back), { Size = UDim2.new(0, 531, 0, 64) }):Play()
-    tweenService:Create(smartBar, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, 73) }):Play()
-    if checkTools() then
-        tweenService:Create(toggle, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -68) }):Play()
-        tweenService:Create(toastsContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -90) }):Play()
-        tweenService:Create(toggle, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Rotation = 180 }):Play()
-    else
-        tweenService:Create(toastsContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -28) }):Play()
-        tweenService:Create(toggle, TweenInfo.new(0.45, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -5) }):Play()
-        tweenService:Create(toggle, TweenInfo.new(0.7, Enum.EasingStyle.Quint), { Rotation = 180 }):Play()
+
+    tweenService:Create(smartBar, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+        BackgroundTransparency = 1,
+    }):Play()
+
+    if smartBar:FindFirstChild("UIStroke") then
+        tweenService:Create(smartBar.UIStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+            Transparency = 1,
+        }):Play()
     end
+    if smartBar:FindFirstChild("Shadow") then
+        tweenService:Create(smartBar.Shadow, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+            ImageTransparency = 1,
+        }):Play()
+    end
+
+    tweenService:Create(smartBar, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
+        Size = UDim2.new(0, 531, 0, 64),
+    }):Play()
+    tweenService:Create(smartBar, TweenInfo.new(0.5, Enum.EasingStyle.Quint), {
+        Position = UDim2.new(0.5, 0, 1, 73),
+    }):Play()
+
+    if checkTools() then
+        tweenService:Create(toggle, TweenInfo.new(0.5, Enum.EasingStyle.Quint), {
+            Position = UDim2.new(0.5, 0, 1, -68),
+        }):Play()
+        tweenService:Create(toastsContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quint), {
+            Position = UDim2.new(0.5, 0, 1, -90),
+        }):Play()
+        tweenService:Create(toggle, TweenInfo.new(0.5, Enum.EasingStyle.Quint), {
+            Rotation = 180,
+        }):Play()
+    else
+        tweenService:Create(toastsContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quint), {
+            Position = UDim2.new(0.5, 0, 1, -28),
+        }):Play()
+        tweenService:Create(toggle, TweenInfo.new(0.45, Enum.EasingStyle.Quint), {
+            Position = UDim2.new(0.5, 0, 1, -5),
+        }):Play()
+        tweenService:Create(toggle, TweenInfo.new(0.7, Enum.EasingStyle.Quint), {
+            Rotation = 180,
+        }):Play()
+    end
+
     task.delay(0.6, function()
-        if not smartBarOpen then smartBar.Visible = false end
+        if not smartBarOpen then
+            smartBar.Visible = false
+        end
     end)
 end
 
@@ -390,7 +548,10 @@ toggle.MouseButton1Click:Connect(function()
 end)
 
 userInputService.InputBegan:Connect(function(input, processed)
-    if not UI.Enabled then return end
+    if not UI.Enabled then
+        return
+    end
+
     local toggleKey = "K"
     for _, cat in ipairs(siriusSettings) do
         for _, set in ipairs(cat.categorySettings) do
@@ -400,7 +561,9 @@ userInputService.InputBegan:Connect(function(input, processed)
             end
         end
     end
-    if input.KeyCode == Enum.KeyCode[toggleKey] and not processed and not debounce then
+
+    local keyCode = Enum.KeyCode[toggleKey]
+    if keyCode and input.KeyCode == keyCode and not processed and not debounce then
         if smartBarOpen then
             closeSmartBar()
         else
@@ -408,10 +571,6 @@ userInputService.InputBegan:Connect(function(input, processed)
         end
     end
 end)
-
-local function queueNotification(Title, Description, Image)
-    print("Notification:", Title, Description)
-end
 
 local function start()
     UI.Enabled = true
@@ -426,10 +585,10 @@ local function start()
         color1 = Color3.fromRGB(62, 211, 201),
         color2 = Color3.fromRGB(0, 170, 127),
         script1 = function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V3/offmenu"))()
+            runRemote("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V3/offmenu")
         end,
         script2 = function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V3/EngMenu"))()
+            runRemote("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V3/EngMenu")
         end,
     })
 
@@ -439,10 +598,10 @@ local function start()
         color1 = Color3.fromRGB(211, 141, 55),
         color2 = Color3.fromRGB(0, 170, 127),
         script1 = function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V3/ENDV2SCRIPT"))()
+            runRemote("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V3/ENDV2SCRIPT")
         end,
         script2 = function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V2/ru/key/RuV2"))()
+            runRemote("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V2/ru/key/RuV2")
         end,
     })
 
@@ -456,12 +615,16 @@ local function start()
             eggMenuOpen = true
             menu.Visible = true
             menu.BackgroundTransparency = 1
-            tweenService:Create(menu, TweenInfo.new(0.2), { BackgroundTransparency = 0.08 }):Play()
+            tweenService:Create(menu, TweenInfo.new(0.2), {
+                BackgroundTransparency = 0.08,
+            }):Play()
         end,
         script2 = function()
             local menu = ensureEggMenu()
             eggMenuOpen = false
-            tweenService:Create(menu, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
+            tweenService:Create(menu, TweenInfo.new(0.2), {
+                BackgroundTransparency = 1,
+            }):Play()
             task.delay(0.2, function()
                 if not eggMenuOpen and menu then
                     menu.Visible = false
