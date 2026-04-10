@@ -1,0 +1,37 @@
+local scripts = {
+    -- Этот URL у тебя сейчас 404, оставил для диагностики:
+    "https://raw.githubusercontent.com/fansikeblan/fanseksripts/main/scripttds",
+
+    -- Второй URL:
+    "https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/main/Roblox",
+}
+
+local function runRemoteScript(index, url)
+    local ok, err = pcall(function()
+        local body = game:HttpGet(url)
+        assert(type(body) == "string" and #body > 0, "empty response")
+
+        -- Частый маркер жесткой обфускации, которая часто падает в Luau
+        if body:find("wearedevs%.net/obfuscator", 1, false) then
+            error("script is heavily obfuscated and likely incompatible with this runtime")
+        end
+
+        local chunk, compileErr = loadstring(body)
+        assert(chunk, "compile error: " .. tostring(compileErr))
+
+        local runOk, runErr = pcall(chunk)
+        assert(runOk, "runtime error: " .. tostring(runErr))
+    end)
+
+    if ok then
+        print(("[OK] #%d %s"):format(index, url))
+    else
+        warn(("[FAIL] #%d %s\n%s"):format(index, url, tostring(err)))
+    end
+end
+
+for i, url in ipairs(scripts) do
+    task.spawn(runRemoteScript, i, url)
+end
+
+print("All scripts queued.")
