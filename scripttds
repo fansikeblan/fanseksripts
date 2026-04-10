@@ -180,7 +180,7 @@ local function createTeleportMenu()
     title.TextColor3 = Color3.new(1, 1, 1)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 14
-    title.ZInext = 2001
+    title.ZIndex = 2001
     title.Parent = teleportMenu
 
     local closeBtn = Instance.new("TextButton")
@@ -198,23 +198,28 @@ local function createTeleportMenu()
     end)
 
     local scroll = Instance.new("ScrollingFrame")
+    scroll.Name = "Scroll"
     scroll.Size = UDim2.new(1, -12, 1, -42)
     scroll.Position = UDim2.new(0, 6, 0, 34)
     scroll.BackgroundTransparency = 1
     scroll.BorderSizePixel = 0
     scroll.ScrollBarThickness = 6
     scroll.ZIndex = 2001
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
     scroll.Parent = teleportMenu
 
     local grid = Instance.new("UIGridLayout")
     grid.CellSize = UDim2.new(0, 95, 0, 30)
     grid.CellPadding = UDim2.new(0, 6, 0, 6)
+    grid.SortOrder = Enum.SortOrder.LayoutOrder
     grid.Parent = scroll
 
     for i = 1, 50 do
         local idx = i
 
         local b = Instance.new("TextButton")
+        b.Name = "TP_" .. tostring(idx)
         b.Size = UDim2.new(0, 95, 0, 30)
         b.BackgroundColor3 = Color3.fromRGB(40, 50, 70)
         b.Text = tostring(idx)
@@ -229,9 +234,6 @@ local function createTeleportMenu()
             teleportMenu.Visible = false
         end)
     end
-
-    task.wait()
-    scroll.CanvasSize = UDim2.new(0, 0, 0, grid.AbsoluteContentSize.Y + 6)
 
     return teleportMenu
 end
