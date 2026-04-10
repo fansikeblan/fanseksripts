@@ -101,7 +101,7 @@ local teleportPoints = {
     [14] = Vector3.new(1205.05, 25, -737.808),
     [15] = Vector3.new(698.569, 147.700, -1178.724),
     [16] = Vector3.new(287.365, 82.800, -575.788),
-    [17] = Vector3.new(36.074, 88.800, -213.404),
+    [17] = Vector3.new(36.074, 88.800, 213.404),
     [18] = Vector3.new(620.424, 39.750, -90.853),
     [19] = Vector3.new(1695.184, 8.800, -130.54),
     [20] = Vector3.new(1086.944, 17.100, -37.837),
@@ -118,7 +118,7 @@ local teleportPoints = {
     [31] = Vector3.new(1056.477, 10, -1353.531),
     [32] = Vector3.new(928.09, 6.700, -707.289),
     [33] = Vector3.new(164.749, 14, -159.049),
-    [34] = Vector3.new(937.025, 44.900, -378.727),
+    [34] = Vector3.new(937.025, -44.900, -378.727),
     [35] = Vector3.new(331.878, -122.700, -516.055),
     [36] = Vector3.new(1355.534, -45.700, -182.79),
     [37] = Vector3.new(1371.808, 69, -1422.842),
@@ -145,9 +145,12 @@ local function teleportToPoint(index)
 
     local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
     local root = character:FindFirstChild("HumanoidRootPart")
-    if root then
-        root.CFrame = CFrame.new(point)
-    end
+    if not root then return end
+
+    local target = point + Vector3.new(0, 3, 0)
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    root.CFrame = CFrame.new(target)
 end
 
 local function createTeleportMenu()
@@ -177,7 +180,7 @@ local function createTeleportMenu()
     title.TextColor3 = Color3.new(1, 1, 1)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 14
-    title.ZIndex = 2001
+    title.ZInext = 2001
     title.Parent = teleportMenu
 
     local closeBtn = Instance.new("TextButton")
@@ -209,10 +212,12 @@ local function createTeleportMenu()
     grid.Parent = scroll
 
     for i = 1, 50 do
+        local idx = i
+
         local b = Instance.new("TextButton")
         b.Size = UDim2.new(0, 95, 0, 30)
         b.BackgroundColor3 = Color3.fromRGB(40, 50, 70)
-        b.Text = tostring(i)
+        b.Text = tostring(idx)
         b.TextColor3 = Color3.new(1, 1, 1)
         b.Font = Enum.Font.GothamSemibold
         b.TextSize = 13
@@ -220,7 +225,7 @@ local function createTeleportMenu()
         b.Parent = scroll
 
         b.MouseButton1Click:Connect(function()
-            teleportToPoint(i)
+            teleportToPoint(idx)
             teleportMenu.Visible = false
         end)
     end
