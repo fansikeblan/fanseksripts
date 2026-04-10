@@ -1,0 +1,24 @@
+local scripts = {
+    "https://raw.githubusercontent.com/fansikeblan/fanseksripts/refs/heads/main/scripttds",
+    "https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/Roblox",
+}
+
+for _, url in ipairs(scripts) do
+    task.spawn(function()
+        local ok, err = pcall(function()
+            local scriptContent = game:HttpGet(url)
+            assert(type(scriptContent) == "string" and #scriptContent > 0, "empty response")
+
+            local fn, compileErr = loadstring(scriptContent)
+            assert(fn, "loadstring error: " .. tostring(compileErr))
+
+            fn()
+        end)
+
+        if not ok then
+            warn(("Failed [%s]: %s"):format(url, tostring(err)))
+        else
+            print(("Loaded [%s]"):format(url))
+        end
+    end)
+end
