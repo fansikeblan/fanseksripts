@@ -231,7 +231,6 @@ local function createTeleportMenu()
 
         b.MouseButton1Click:Connect(function()
             teleportToPoint(idx)
-            teleportMenu.Visible = false
         end)
     end
 
