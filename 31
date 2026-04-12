@@ -1,11 +1,18 @@
--- LocalScript → StarterPlayer → StarterPlayerScripts (или ScreenGui в StarterGui)
+Вот весь код одним текстом — можно скопировать в LocalScript:
+
+--[[
+	LocalScript → StarterPlayer → StarterPlayerScripts
+	(или ScreenGui в StarterGui — тогда убери блок создания ScreenGui и помести кнопку в свой Gui)
+	Кнопка: ЛКМ перетаскивание; короткий клик (без заметного сдвига) — старт/стоп авто-телепорта.
+	Логика цикла: телепорт к текущей координате из списка → пауза 1 сек (как удержание E) → следующая точка.
+]]
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
-
+local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
-
-local HOLD_SECONDS = 2
-
+local playerGui = player:WaitForChild("PlayerGui")
+local HOLD_SECONDS = 2 -- удержание клавиши E (ручной режим)
+local AUTO_HOLD_SECONDS = 1 -- пауза между точками в авто-режиме (как «E 1 сек»)
 local TELEPORT_POINTS = {
 	[1] = Vector3.new(1024.077, 6, -554.941),
 	[2] = Vector3.new(994.426, 25, -1298.539),
@@ -58,31 +65,41 @@ local TELEPORT_POINTS = {
 	[49] = Vector3.new(316.027, 64.690, 66.164),
 	[50] = Vector3.new(514.122, -22.450, -380.379),
 }
-
 local index = 1
 local busy = false
-
+local autoRunning = false
+local autoThread = nil
+local DRAG_THRESHOLD_PX = 10
 local function getRoot()
 	local char = player.Character
-	if not char then return nil end
+	if not char then
+		return nil
+	end
 	return char:FindFirstChild("HumanoidRootPart")
 end
-
 local function teleportToNext()
 	local root = getRoot()
-	if not root then return end
+	if not root then
+		return
+	end
 	local pos = TELEPORT_POINTS[index]
-	if not pos then return end
+	if not pos then
+		return
+	end
 	root.CFrame = CFrame.new(pos)
 	index += 1
 	if index > #TELEPORT_POINTS then
 		index = 1
 	end
 end
-
+-- Ручной режим: удержание E
 UserInputService.InputBegan:Connect(function(input, processed)
-	if processed or busy then return end
-	if input.KeyCode ~= Enum.KeyCode.E then return end
+	if processed or busy or autoRunning then
+		return
+	end
+	if input.KeyCode ~= Enum.KeyCode.E then
+		return
+	end
 	busy = true
 	task.spawn(function()
 		local t0 = os.clock()
@@ -95,4 +112,111 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		end
 		busy = false
 	end)
+end)
+-- --- UI: перетаскиваемая кнопка + авто-телепорт ---
+local gui = Instance.new("ScreenGui")
+gui.Name = "TeleportRouteGui"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
+local button = Instance.new("TextButton")
+button.Name = "TeleportAutoButton"
+button.Size = UDim2.fromOffset(180, 48)
+button.Position = UDim2.fromOffset(24, 120)
+button.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+button.TextColor3 = Color3.fromRGB(240, 240, 240)
+button.Font = Enum.Font.GothamMedium
+button.TextSize = 16
+button.AutoButtonColor = true
+button.Text = "Телепорт (авто)"
+button.Parent = gui
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = button
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 1
+stroke.Color = Color3.fromRGB(90, 90, 100)
+stroke.Parent = button
+local function setAutoRunning(on)
+	autoRunning = on
+	if on then
+		button.Text = "Стоп"
+		button.BackgroundColor3 = Color3.fromRGB(80, 35, 35)
+	else
+		button.Text = "Телепорт (авто)"
+		button.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+	end
+end
+local function runAutoLoop()
+	while autoRunning do
+		local root = getRoot()
+		if not root then
+			task.wait(0.2)
+			continue
+		end
+		local pos = TELEPORT_POINTS[index]
+		if not pos then
+			break
+		end
+		root.CFrame = CFrame.new(pos)
+		index += 1
+		if index > #TELEPORT_POINTS then
+			index = 1
+		end
+		task.wait(AUTO_HOLD_SECONDS)
+	end
+	setAutoRunning(false)
+end
+local dragging = false
+local dragStartMouse = Vector2.zero
+local dragStartPosOffset = Vector2.zero
+local pointerDownOnButton = false
+RunService.RenderStepped:Connect(function()
+	if not dragging then
+		return
+	end
+	if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+		dragging = false
+		return
+	end
+	local cur = UserInputService:GetMouseLocation()
+	local delta = cur - dragStartMouse
+	button.Position = UDim2.fromOffset(dragStartPosOffset.X + delta.X, dragStartPosOffset.Y + delta.Y)
+end)
+button.InputBegan:Connect(function(input)
+	if input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+		return
+	end
+	pointerDownOnButton = true
+	dragging = true
+	dragStartMouse = UserInputService:GetMouseLocation()
+	dragStartPosOffset = Vector2.new(button.AbsolutePosition.X, button.AbsolutePosition.Y)
+end)
+UserInputService.InputEnded:Connect(function(input, _processed)
+	if input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+		return
+	end
+	if not pointerDownOnButton then
+		return
+	end
+	pointerDownOnButton = false
+	local endMouse = UserInputService:GetMouseLocation()
+	local moved = (endMouse - dragStartMouse).Magnitude
+	dragging = false
+	if moved >= DRAG_THRESHOLD_PX then
+		return
+	end
+	-- короткий клик — переключить авто
+	if autoRunning then
+		autoRunning = false
+		if autoThread then
+			task.cancel(autoThread)
+			autoThread = nil
+		end
+		setAutoRunning(false)
+	else
+		setAutoRunning(true)
+		autoThread = task.spawn(runAutoLoop)
+	end
 end)
