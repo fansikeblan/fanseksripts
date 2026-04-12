@@ -1,10 +1,11 @@
 --[[
-	Клиентский скрипт (LocalScript): телепорт по точкам + удержание E 1 сек на каждой.
+	Клиентский скрипт (LocalScript): бесконечный телепорт по точкам, пока зажата E.
+	Зажмите E — маршрут крутится по кругу; отпустите E — остановка.
 	Положите в StarterPlayerScripts или туда, где у вас выполняется локальный Lua.
 ]]
 
 local Players = game:GetService("Players")
-local VirtualInputManager = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 
@@ -76,10 +77,8 @@ local function teleportTo(position)
 	end
 end
 
-local function holdKeyE(seconds)
-	VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-	task.wait(seconds)
-	VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+local function isEHeld()
+	return UserInputService:IsKeyDown(Enum.KeyCode.E)
 end
 
 -- Ожидание персонажа перед стартом
@@ -88,8 +87,21 @@ if not player.Character then
 end
 task.wait(0.5)
 
-for _, pos in ipairs(POINTS) do
-	teleportTo(pos)
-	task.wait(1) -- секунда после телепорта перед зажатием E
-	holdKeyE(1)
+-- Старт после того, как зажали E (иначе цикл сразу завершится)
+repeat
+	task.wait()
+until isEHeld()
+
+while isEHeld() do
+	for _, pos in ipairs(POINTS) do
+		if not isEHeld() then
+			break
+		end
+		teleportTo(pos)
+		task.wait(1)
+		if not isEHeld() then
+			break
+		end
+		task.wait(1) -- удержание E для взаимодействия в игре (клавиша уже зажата)
+	end
 end
