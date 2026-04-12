@@ -1,592 +1,96 @@
-if not game:IsLoaded() then game.Loaded:Wait() end
+-- LocalScript (например в StarterPlayerScripts или в ScreenGui)
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
 
-local coreGui = game:GetService("CoreGui")
-local httpService = game:GetService("HttpService")
-local lighting = game:GetService("Lighting")
-local players = game:GetService("Players")
-local runService = game:GetService("RunService")
-local guiService = game:GetService("GuiService")
-local statsService = game:GetService("Stats")
-local starterGui = game:GetService("StarterGui")
-local teleportService = game:GetService("TeleportService")
-local tweenService = game:GetService("TweenService")
-local userInputService = game:GetService("UserInputService")
-local gameSettings = UserSettings():GetService("UserGameSettings")
+local player = Players.LocalPlayer
 
-local camera = workspace.CurrentCamera
-local localPlayer = players.LocalPlayer
-local mouse = localPlayer:GetMouse()
-local smartBarOpen = true
-local debounce = false
-local checkingForKey = true
-local oldVolume = gameSettings.MasterVolume
-
-local siriusValues = {
-    siriusVersion = "1.26",
-    siriusName = "Sirius",
-    interfaceAsset = 14183548964,
-    actions = {},
+-- Порядок обхода: 1 → 2 → … → 50 → снова 1
+local TELEPORT_POINTS = {
+	Vector3.new(1024.077, 6, -554.941),
+	Vector3.new(994.426, 25, 1298.539),
+	Vector3.new(1089.199, 8, -338.105),
+	Vector3.new(1766.484, -39.200, -152.09),
+	Vector3.new(644.5, 5.600, -192),
+	Vector3.new(929, 24.700, -1383),
+	Vector3.new(1737.011, 14, -735.9),
+	Vector3.new(1563.291, -15.500, -836.908),
+	Vector3.new(911.951, 43.650, -752.54),
+	Vector3.new(977.0521, 3.900, 342.855),
+	Vector3.new(347.726, -6, -448.981),
+	Vector3.new(1617.469, 42.600, -517.965),
+	Vector3.new(387.048, -3, -1446.362),
+	Vector3.new(1205.05, 25, -737.808),
+	Vector3.new(698.569, 147.700, -1178.724),
+	Vector3.new(287.365, 82.800, -575.788),
+	Vector3.new(36.074, 88.800, 213.404),
+	Vector3.new(620.424, 39.750, -90.853),
+	Vector3.new(1695.184, 8.800, -130.54),
+	Vector3.new(1086.944, 17.100, -37.837),
+	Vector3.new(589.08, 28.500, -888.108),
+	Vector3.new(1137.45, 6, -999.764),
+	Vector3.new(1846.866, 21.600, -773.932),
+	Vector3.new(1167.921, 68.200, -448.999),
+	Vector3.new(1496.655, 52.700, 34.976),
+	Vector3.new(1011.956, -6.200, 695.93),
+	Vector3.new(849.683, 742.300, 456.607),
+	Vector3.new(1145.348, 6, -878.127),
+	Vector3.new(610.898, -16.730, -68.453),
+	Vector3.new(540.479, 26.200, -1017.439),
+	Vector3.new(1056.477, 10, -1353.531),
+	Vector3.new(928.09, 6.700, -707.289),
+	Vector3.new(164.749, 14, -159.049),
+	Vector3.new(937.025, -44.900, -378.727),
+	Vector3.new(331.878, -122.700, -516.055),
+	Vector3.new(1355.534, -45.700, -182.79),
+	Vector3.new(1371.808, 69, -1422.842),
+	Vector3.new(380.915, 20.500, -1443.573),
+	Vector3.new(489.577, -79, 1118.979),
+	Vector3.new(1365.953, -9.600, 497.342),
+	Vector3.new(384.344, -22.130, -580.555),
+	Vector3.new(955.457, -92.500, -795.354),
+	Vector3.new(636.641, -57, -1267.01),
+	Vector3.new(1241.371, 67.700, 570.692),
+	Vector3.new(1884, -49, -834.5),
+	Vector3.new(1102.859, -9.600, 824.711),
+	Vector3.new(756, -28, -3.402),
+	Vector3.new(784.144, 7, -666.677),
+	Vector3.new(316.027, 64.690, 66.164),
+	Vector3.new(514.122, -22.450, -380.379),
 }
 
-local siriusSettings = {
-    {
-        name = "Keybinds",
-        color = Color3.new(0.0941176, 0.686275, 0.509804),
-        categorySettings = {
-            {
-                name = "Toggle smartBar",
-                settingType = "Key",
-                current = "K",
-                id = "smartbar"
-            },
-        }
-    }
-}
+local index = 1
+local busy = false
 
-local guiParent = gethui and gethui() or coreGui
-local sirius = guiParent:FindFirstChild("Sirius")
-if sirius then sirius:Destroy() end
-
-local UI = game:GetObjects("rbxassetid://" .. siriusValues.interfaceAsset)[1]
-UI.Name = siriusValues.siriusName
-UI.Parent = guiParent
-UI.Enabled = false
-UI.DisplayOrder = 100
-
-local notificationContainer = UI.Notifications
-local smartBar = UI.SmartBar
-local toggle = UI.Toggle
-local toastsContainer = UI.Toasts
-
-for _, child in ipairs(UI:GetChildren()) do
-    if child:IsA("Frame") and child.Name ~= "SmartBar" and child.Name ~= "Notifications" and child.Name ~= "Toasts" and child.Name ~= "Toggle" then
-        child:Destroy()
-    end
+local function getRoot()
+	local char = player.Character
+	if not char then return nil end
+	return char:FindFirstChild("HumanoidRootPart")
 end
 
-for _, btn in ipairs(smartBar.Buttons:GetChildren()) do
-    if btn:IsA("Frame") then btn:Destroy() end
+local function teleportToNext()
+	local root = getRoot()
+	if not root then return end
+	local pos = TELEPORT_POINTS[index]
+	root.CFrame = CFrame.new(pos)
+	index += 1
+	if index > #TELEPORT_POINTS then
+		index = 1
+	end
 end
 
-local buttonContainer = smartBar.Buttons
-buttonContainer:ClearAllChildren()
-buttonContainer.ZIndex = 100
-
-local layout = Instance.new("UIListLayout")
-layout.FillDirection = Enum.FillDirection.Horizontal
-layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-layout.VerticalAlignment = Enum.VerticalAlignment.Center
-layout.Padding = UDim.new(0, 8)
-layout.Parent = buttonContainer
-
-local padding = Instance.new("UIPadding")
-padding.PaddingLeft = UDim.new(0, 10)
-padding.PaddingRight = UDim.new(0, 10)
-padding.Parent = buttonContainer
-
-local teleportPoints = {
-    [1] = Vector3.new(1024.077, 6, -554.941),
-    [2] = Vector3.new(994.426, 25, -1298.539),
-    [3] = Vector3.new(1089.199, 8, -338.105),
-    [4] = Vector3.new(1766.484, -39.200, -152.09),
-    [5] = Vector3.new(644.5, 5.600, -192),
-    [6] = Vector3.new(929, 24.700, -1383),
-    [7] = Vector3.new(1737.011, 14, -735.9),
-    [8] = Vector3.new(1563.291, -15.500, -836.908),
-    [9] = Vector3.new(911.951, 43.650, -752.54),
-    [10] = Vector3.new(977.0521, 3.900, 342.855),
-    [11] = Vector3.new(347.726, -6, -448.981),
-    [12] = Vector3.new(1617.469, 42.600, -517.965),
-    [13] = Vector3.new(387.048, -3, -1446.362),
-    [14] = Vector3.new(1205.05, 25, -737.808),
-    [15] = Vector3.new(698.569, 147.700, -1178.724),
-    [16] = Vector3.new(287.365, 82.800, -575.788),
-    [17] = Vector3.new(936.074, 88.900, 213.404),
-    [18] = Vector3.new(620.424, 39.750, -90.853),
-    [19] = Vector3.new(1695.184, 8.800, -130.54),
-    [20] = Vector3.new(1086.944, 17.100, -37.837),
-    [21] = Vector3.new(589.08, 28.500, -888.108),
-    [22] = Vector3.new(1137.45, 6, -999.764),
-    [23] = Vector3.new(1846.866, 21.600, -773.932),
-    [24] = Vector3.new(1167.921, 68.200, -448.999),
-    [25] = Vector3.new(1496.655, 52.700, 34.976),
-    [26] = Vector3.new(1011.956, -6.200, 695.93),
-    [27] = Vector3.new(849.683, 742.300, 456.607),
-    [28] = Vector3.new(1145.348, 6, -878.127),
-    [29] = Vector3.new(610.898, -16.730, -68.453),
-    [30] = Vector3.new(540.479, 26.200, -1017.439),
-    [31] = Vector3.new(1056.477, 10, -1353.531),
-    [32] = Vector3.new(928.09, 6.700, -707.289),
-    [33] = Vector3.new(164.749, 14, -159.049),
-    [34] = Vector3.new(973.025, -44.900, -378.727),
-    [35] = Vector3.new(331.878, -122.700, -516.055),
-    [36] = Vector3.new(1355.534, -45.700, -182.79),
-    [37] = Vector3.new(1371.808, 69, -1422.842),
-    [38] = Vector3.new(380.915, 20.500, -1443.573),
-    [39] = Vector3.new(489.577, -79, -1118.979),
-    [40] = Vector3.new(1365.953, -9.600, 497.342),
-    [41] = Vector3.new(384.344, -22.130, -580.555),
-    [42] = Vector3.new(955.457, -92.500, -795.354),
-    [43] = Vector3.new(636.641, -57, -1267.01),
-    [44] = Vector3.new(1241.371, 67.700, 570.692),
-    [45] = Vector3.new(1884, -49, -834.5),
-    [46] = Vector3.new(1102.859, -9.600, 824.711),
-    [47] = Vector3.new(756, -28, -3.402),
-    [48] = Vector3.new(784.144, 7, -666.677),
-    [49] = Vector3.new(316.027, 64.690, 66.164),
-    [50] = Vector3.new(514.122, -22.450, -380.379),
-}
-
-local teleportMenu
-
-local eChain50Active = false
-local eChain50NextIndex = 1
-local eHold50Accum = 0
-local eHold50NeedRelease = false
-
-local function teleportToPoint(index)
-    local point = teleportPoints[index]
-    if not point then return end
-
-    local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-
-    local target = point + Vector3.new(0, 3, 0)
-    root.AssemblyLinearVelocity = Vector3.zero
-    root.AssemblyAngularVelocity = Vector3.zero
-    root.CFrame = CFrame.new(target)
-end
-
-local function createTeleportMenu()
-    if teleportMenu then return teleportMenu end
-
-    teleportMenu = Instance.new("Frame")
-    teleportMenu.Name = "TeleportMenu"
-    teleportMenu.Size = UDim2.new(0, 320, 0, 360)
-    teleportMenu.Position = UDim2.new(0.5, -160, 0.5, -220)
-    teleportMenu.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    teleportMenu.BackgroundTransparency = 0.1
-    teleportMenu.BorderSizePixel = 0
-    teleportMenu.Visible = false
-    teleportMenu.ZIndex = 2000
-    teleportMenu.Parent = UI
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(80, 130, 220)
-    stroke.Thickness = 1.5
-    stroke.Transparency = 0.2
-    stroke.Parent = teleportMenu
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 30)
-    title.BackgroundTransparency = 1
-    title.Text = "Teleport Menu (1-50)"
-    title.TextColor3 = Color3.new(1, 1, 1)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 14
-    title.ZIndex = 2001
-    title.Parent = teleportMenu
-
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeBtn.Position = UDim2.new(1, -30, 0, 0)
-    closeBtn.BackgroundTransparency = 1
-    closeBtn.Text = "X"
-    closeBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.TextSize = 14
-    closeBtn.ZIndex = 2002
-    closeBtn.Parent = teleportMenu
-    closeBtn.MouseButton1Click:Connect(function()
-        teleportMenu.Visible = false
-    end)
-
-    local scroll = Instance.new("ScrollingFrame")
-    scroll.Name = "Scroll"
-    scroll.Size = UDim2.new(1, -12, 1, -42)
-    scroll.Position = UDim2.new(0, 6, 0, 34)
-    scroll.BackgroundTransparency = 1
-    scroll.BorderSizePixel = 0
-    scroll.ScrollBarThickness = 6
-    scroll.ZIndex = 2001
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    scroll.Parent = teleportMenu
-
-    local grid = Instance.new("UIGridLayout")
-    grid.CellSize = UDim2.new(0, 95, 0, 30)
-    grid.CellPadding = UDim2.new(0, 6, 0, 6)
-    grid.SortOrder = Enum.SortOrder.LayoutOrder
-    grid.Parent = scroll
-
-    for i = 1, 50 do
-        local idx = i
-
-        local b = Instance.new("TextButton")
-        b.Name = "TP_" .. tostring(idx)
-        b.Size = UDim2.new(0, 95, 0, 30)
-        b.BackgroundColor3 = Color3.fromRGB(40, 50, 70)
-        b.Text = tostring(idx)
-        b.TextColor3 = Color3.new(1, 1, 1)
-        b.Font = Enum.Font.GothamSemibold
-        b.TextSize = 13
-        b.ZIndex = 2002
-        b.Parent = scroll
-
-        b.MouseButton1Click:Connect(function()
-            teleportToPoint(idx)
-        end)
-    end
-
-    return teleportMenu
-end
-
-function addCustomButton(name, config)
-    assert(name and type(name) == "string")
-    assert(config and type(config) == "table")
-    assert(config.image1 and config.image2)
-    assert(config.color1 and config.color2)
-    assert(config.script1 and config.script2)
-
-    local button = Instance.new("Frame")
-    button.Name = name
-    button.Size = UDim2.new(0, 36, 0, 36)
-    button.BackgroundColor3 = config.color1
-    button.BackgroundTransparency = 0
-    button.ZIndex = 1010
-    button.Parent = buttonContainer
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = config.color1
-    stroke.Thickness = 1.5
-    stroke.Transparency = 0
-    stroke.ZIndex = 1011
-    stroke.Parent = button
-
-    local gradient = Instance.new("UIGradient")
-    gradient.Rotation = 50
-    gradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.new(0.1, 0.1, 0.1)),
-        ColorSequenceKeypoint.new(1, config.color1)
-    })
-    gradient.Parent = button
-
-    local icon = Instance.new("ImageLabel")
-    icon.Name = "Icon"
-    icon.Size = UDim2.new(0, 20, 0, 20)
-    icon.AnchorPoint = Vector2.new(0.5, 0.5)
-    icon.Position = UDim2.new(0.5, 0, 0.5, 0)
-    icon.BackgroundTransparency = 1
-    icon.Image = "rbxassetid://" .. config.image1
-    icon.ImageTransparency = 0.5
-    icon.ZIndex = 1012
-    icon.Parent = button
-
-    local interact = Instance.new("TextButton")
-    interact.Name = "Interact"
-    interact.Size = UDim2.new(1, 0, 1, 0)
-    interact.BackgroundTransparency = 1
-    interact.Text = ""
-    interact.ZIndex = 1013
-    interact.Parent = button
-
-    local currentState = 1
-
-    local function updateButton()
-        if currentState == 1 then
-            tweenService:Create(button, TweenInfo.new(0.3), { BackgroundColor3 = config.color1 }):Play()
-            tweenService:Create(stroke, TweenInfo.new(0.3), { Color = config.color1 }):Play()
-            gradient.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.new(0.1, 0.1, 0.1)),
-                ColorSequenceKeypoint.new(1, config.color1)
-            })
-            icon.Image = "rbxassetid://" .. config.image1
-        else
-            tweenService:Create(button, TweenInfo.new(0.3), { BackgroundColor3 = config.color2 }):Play()
-            tweenService:Create(stroke, TweenInfo.new(0.3), { Color = config.color2 }):Play()
-            gradient.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.new(0.1, 0.1, 0.1)),
-                ColorSequenceKeypoint.new(1, config.color2)
-            })
-            icon.Image = "rbxassetid://" .. config.image2
-        end
-    end
-
-    interact.MouseButton1Click:Connect(function()
-        if debounce then return end
-        currentState = (currentState == 1) and 2 or 1
-        updateButton()
-        local scriptToRun = (currentState == 1) and config.script1 or config.script2
-        if type(scriptToRun) == "string" then
-            loadstring(scriptToRun)()
-        elseif type(scriptToRun) == "function" then
-            scriptToRun()
-        end
-        tweenService:Create(button, TweenInfo.new(0.1), { Size = UDim2.new(0, 32, 0, 32) }):Play()
-        task.wait(0.1)
-        tweenService:Create(button, TweenInfo.new(0.2), { Size = UDim2.new(0, 36, 0, 36) }):Play()
-    end)
-
-    interact.MouseEnter:Connect(function()
-        if debounce then return end
-        tweenService:Create(button, TweenInfo.new(0.3), { BackgroundTransparency = 0.2 }):Play()
-        tweenService:Create(stroke, TweenInfo.new(0.3), { Transparency = 1 }):Play()
-        tweenService:Create(icon, TweenInfo.new(0.2), { ImageTransparency = 0 }):Play()
-    end)
-
-    interact.MouseLeave:Connect(function()
-        if debounce then return end
-        tweenService:Create(button, TweenInfo.new(0.3), { BackgroundTransparency = 0 }):Play()
-        tweenService:Create(stroke, TweenInfo.new(0.3), { Transparency = 0 }):Play()
-        tweenService:Create(icon, TweenInfo.new(0.2), { ImageTransparency = 0.5 }):Play()
-    end)
-
-    table.insert(siriusValues.actions, { name = name, button = button, config = config })
-    layout:ApplyLayout()
-    return button
-end
-
-local function checkTools()
-    task.wait(0.03)
-    if localPlayer.Backpack and localPlayer.Character then
-        if localPlayer.Backpack:FindFirstChildOfClass("Tool") or localPlayer.Character:FindFirstChildOfClass("Tool") then
-            return true
-        end
-    end
-    return false
-end
-
-local function openSmartBar()
-    smartBarOpen = true
-    smartBar.Visible = true
-    smartBar.BackgroundTransparency = 1
-    smartBar.UIStroke.Transparency = 1
-    smartBar.Shadow.ImageTransparency = 1
-    smartBar.Position = UDim2.new(0.5, 0, 1.05, 0)
-    smartBar.Size = UDim2.new(0, 531, 0, 64)
-    toggle.Rotation = 180
-
-    if checkTools() then
-        toggle.Position = UDim2.new(0.5, 0, 1, -68)
-    else
-        toggle.Position = UDim2.new(0.5, 0, 1, -5)
-    end
-
-    for _, btn in ipairs(buttonContainer:GetChildren()) do
-        if btn:IsA("Frame") then
-            btn.BackgroundTransparency = 1
-            if btn:FindFirstChild("UIStroke") then btn.UIStroke.Transparency = 1 end
-            if btn:FindFirstChild("Icon") then btn.Icon.ImageTransparency = 1 end
-        end
-    end
-
-    tweenService:Create(smartBar, TweenInfo.new(0.7, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -12) }):Play()
-    tweenService:Create(toastsContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -110) }):Play()
-    tweenService:Create(toggle, TweenInfo.new(0.7, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -85) }):Play()
-    tweenService:Create(smartBar, TweenInfo.new(0.6, Enum.EasingStyle.Quint), { Size = UDim2.new(0, 581, 0, 70) }):Play()
-    tweenService:Create(smartBar, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { BackgroundTransparency = 0 }):Play()
-    tweenService:Create(smartBar.Shadow, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { ImageTransparency = 0.7 }):Play()
-    tweenService:Create(smartBar.UIStroke, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { Transparency = 0.95 }):Play()
-    tweenService:Create(toggle, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { ImageTransparency = 0 }):Play()
-
-    for _, btn in ipairs(buttonContainer:GetChildren()) do
-        if btn:IsA("Frame") then
-            tweenService:Create(btn, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { Size = UDim2.new(0, 36, 0, 36) }):Play()
-            tweenService:Create(btn, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { BackgroundTransparency = 0 }):Play()
-            if btn:FindFirstChild("UIStroke") then
-                tweenService:Create(btn.UIStroke, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { Transparency = 0 }):Play()
-            end
-            if btn:FindFirstChild("Icon") then
-                tweenService:Create(btn.Icon, TweenInfo.new(0.8, Enum.EasingStyle.Quint), { ImageTransparency = 0 }):Play()
-            end
-        end
-        task.wait(0.03)
-    end
-
-    task.delay(0.9, function()
-        if smartBarOpen then
-            for _, btn in ipairs(buttonContainer:GetChildren()) do
-                if btn:IsA("Frame") then
-                    btn.BackgroundTransparency = 0
-                    if btn:FindFirstChild("UIStroke") then btn.UIStroke.Transparency = 0 end
-                    if btn:FindFirstChild("Icon") then btn.Icon.ImageTransparency = 0 end
-                end
-            end
-        end
-    end)
-end
-
-local function closeSmartBar()
-    smartBarOpen = false
-
-    for _, btn in ipairs(buttonContainer:GetChildren()) do
-        if btn:IsA("Frame") then
-            tweenService:Create(btn, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { BackgroundTransparency = 1 }):Play()
-            if btn:FindFirstChild("UIStroke") then
-                tweenService:Create(btn.UIStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { Transparency = 1 }):Play()
-            end
-            if btn:FindFirstChild("Icon") then
-                tweenService:Create(btn.Icon, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { ImageTransparency = 1 }):Play()
-            end
-        end
-    end
-
-    tweenService:Create(smartBar, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { BackgroundTransparency = 1 }):Play()
-    tweenService:Create(smartBar.UIStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { Transparency = 1 }):Play()
-    tweenService:Create(smartBar.Shadow, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { ImageTransparency = 1 }):Play()
-    tweenService:Create(smartBar, TweenInfo.new(0.5, Enum.EasingStyle.Back), { Size = UDim2.new(0, 531, 0, 64) }):Play()
-    tweenService:Create(smartBar, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, 73) }):Play()
-
-    if checkTools() then
-        tweenService:Create(toggle, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -68) }):Play()
-        tweenService:Create(toastsContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -90) }):Play()
-        tweenService:Create(toggle, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Rotation = 180 }):Play()
-    else
-        tweenService:Create(toastsContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -28) }):Play()
-        tweenService:Create(toggle, TweenInfo.new(0.45, Enum.EasingStyle.Quint), { Position = UDim2.new(0.5, 0, 1, -5) }):Play()
-        tweenService:Create(toggle, TweenInfo.new(0.7, Enum.EasingStyle.Quint), { Rotation = 180 }):Play()
-    end
-
-    task.delay(0.6, function()
-        if not smartBarOpen then smartBar.Visible = false end
-    end)
-end
-
-toggle.MouseButton1Click:Connect(function()
-    if smartBarOpen then closeSmartBar() else openSmartBar() end
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed or busy then return end
+	if input.KeyCode ~= Enum.KeyCode.E then return end
+	busy = true
+	task.spawn(function()
+		local t0 = os.clock()
+		while UserInputService:IsKeyDown(Enum.KeyCode.E) do
+			if os.clock() - t0 >= 3 then
+				teleportToNext()
+				break
+			end
+			task.wait(0.05)
+		end
+		busy = false
+	end)
 end)
-
-userInputService.InputBegan:Connect(function(input, processed)
-    if not UI.Enabled then return end
-
-    local toggleKey = "K"
-    for _, cat in ipairs(siriusSettings) do
-        for _, set in ipairs(cat.categorySettings) do
-            if set.id == "smartbar" and set.current then
-                toggleKey = set.current
-                break
-            end
-        end
-    end
-
-    if input.KeyCode == Enum.KeyCode[toggleKey] and not processed and not debounce then
-        if smartBarOpen then closeSmartBar() else openSmartBar() end
-    end
-end)
-
-runService.Heartbeat:Connect(function(dt)
-    if not UI.Enabled or not eChain50Active then
-        eHold50Accum = 0
-        eHold50NeedRelease = false
-        return
-    end
-    if userInputService:GetFocusedTextBox() then
-        eHold50Accum = 0
-        return
-    end
-
-    local eDown = userInputService:IsKeyDown(Enum.KeyCode.E)
-
-    if eHold50NeedRelease then
-        if not eDown then
-            eHold50NeedRelease = false
-            eHold50Accum = 0
-        end
-        return
-    end
-
-    if eDown then
-        eHold50Accum += dt
-        if eHold50Accum >= 3 then
-            eHold50Accum = 0
-            eHold50NeedRelease = true
-            teleportToPoint(eChain50NextIndex)
-            eChain50NextIndex = eChain50NextIndex % 50 + 1
-        end
-    else
-        eHold50Accum = 0
-    end
-end)
-
-local function queueNotification(Title, Description, Image)
-    print("Notification:", Title, Description)
-end
-
-local function toggleEChain50()
-    eChain50Active = not eChain50Active
-    eHold50Accum = 0
-    eHold50NeedRelease = false
-    if eChain50Active then
-        eChain50NextIndex = 1
-    end
-end
-
-local function start()
-    UI.Enabled = true
-    notificationContainer.Visible = true
-    toastsContainer.Visible = true
-    smartBar.Visible = true
-    toggle.Visible = true
-
-    addCustomButton("Example", {
-        image1 = 6479819618,
-        image2 = 6479819618,
-        color1 = Color3.fromRGB(62, 211, 201),
-        color2 = Color3.fromRGB(0, 170, 127),
-        script1 = function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V3/offmenu"))()
-        end,
-        script2 = function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V3/EngMenu"))()
-        end
-    })
-
-    addCustomButton("Example", {
-        image1 = 9753762469,
-        image2 = 9753762469,
-        color1 = Color3.fromRGB(211, 141, 55),
-        color2 = Color3.fromRGB(0, 170, 127),
-        script1 = function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V3/ENDV2SCRIPT"))()
-        end,
-        script2 = function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/1Qlua-RBXscript/1qlua/refs/heads/main/V2/ru/key/RuV2"))()
-        end
-    })
-
-    addCustomButton("TP Menu", {
-        image1 = 6031094678,
-        image2 = 6031094678,
-        color1 = Color3.fromRGB(120, 170, 255),
-        color2 = Color3.fromRGB(80, 130, 220),
-        script1 = function()
-            local menu = createTeleportMenu()
-            menu.Visible = not menu.Visible
-        end,
-        script2 = function()
-            local menu = createTeleportMenu()
-            menu.Visible = not menu.Visible
-        end
-    })
-
-    addCustomButton("E chain 1-50", {
-        image1 = 7743876056,
-        image2 = 7743876056,
-        color1 = Color3.fromRGB(90, 200, 120),
-        color2 = Color3.fromRGB(40, 120, 70),
-        script1 = toggleEChain50,
-        script2 = toggleEChain50,
-    })
-
-    task.spawn(function()
-        while UI.Enabled do
-            if smartBar and smartBar:FindFirstChild("Time") then
-                smartBar.Time.Text = os.date("%H") .. ":" .. os.date("%M")
-            end
-            task.wait(1)
-        end
-    end)
-end
-
-start()
