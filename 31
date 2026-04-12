@@ -1,61 +1,62 @@
--- LocalScript (например в StarterPlayerScripts или в ScreenGui)
+-- LocalScript → StarterPlayer → StarterPlayerScripts (или ScreenGui в StarterGui)
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 
 local player = Players.LocalPlayer
 
--- Порядок обхода: 1 → 2 → … → 50 → снова 1
+local HOLD_SECONDS = 2
+
 local TELEPORT_POINTS = {
-	Vector3.new(1024.077, 6, -554.941),
-	Vector3.new(994.426, 25, 1298.539),
-	Vector3.new(1089.199, 8, -338.105),
-	Vector3.new(1766.484, -39.200, -152.09),
-	Vector3.new(644.5, 5.600, -192),
-	Vector3.new(929, 24.700, -1383),
-	Vector3.new(1737.011, 14, -735.9),
-	Vector3.new(1563.291, -15.500, -836.908),
-	Vector3.new(911.951, 43.650, -752.54),
-	Vector3.new(977.0521, 3.900, 342.855),
-	Vector3.new(347.726, -6, -448.981),
-	Vector3.new(1617.469, 42.600, -517.965),
-	Vector3.new(387.048, -3, -1446.362),
-	Vector3.new(1205.05, 25, -737.808),
-	Vector3.new(698.569, 147.700, -1178.724),
-	Vector3.new(287.365, 82.800, -575.788),
-	Vector3.new(36.074, 88.800, 213.404),
-	Vector3.new(620.424, 39.750, -90.853),
-	Vector3.new(1695.184, 8.800, -130.54),
-	Vector3.new(1086.944, 17.100, -37.837),
-	Vector3.new(589.08, 28.500, -888.108),
-	Vector3.new(1137.45, 6, -999.764),
-	Vector3.new(1846.866, 21.600, -773.932),
-	Vector3.new(1167.921, 68.200, -448.999),
-	Vector3.new(1496.655, 52.700, 34.976),
-	Vector3.new(1011.956, -6.200, 695.93),
-	Vector3.new(849.683, 742.300, 456.607),
-	Vector3.new(1145.348, 6, -878.127),
-	Vector3.new(610.898, -16.730, -68.453),
-	Vector3.new(540.479, 26.200, -1017.439),
-	Vector3.new(1056.477, 10, -1353.531),
-	Vector3.new(928.09, 6.700, -707.289),
-	Vector3.new(164.749, 14, -159.049),
-	Vector3.new(937.025, -44.900, -378.727),
-	Vector3.new(331.878, -122.700, -516.055),
-	Vector3.new(1355.534, -45.700, -182.79),
-	Vector3.new(1371.808, 69, -1422.842),
-	Vector3.new(380.915, 20.500, -1443.573),
-	Vector3.new(489.577, -79, 1118.979),
-	Vector3.new(1365.953, -9.600, 497.342),
-	Vector3.new(384.344, -22.130, -580.555),
-	Vector3.new(955.457, -92.500, -795.354),
-	Vector3.new(636.641, -57, -1267.01),
-	Vector3.new(1241.371, 67.700, 570.692),
-	Vector3.new(1884, -49, -834.5),
-	Vector3.new(1102.859, -9.600, 824.711),
-	Vector3.new(756, -28, -3.402),
-	Vector3.new(784.144, 7, -666.677),
-	Vector3.new(316.027, 64.690, 66.164),
-	Vector3.new(514.122, -22.450, -380.379),
+	[1] = Vector3.new(1024.077, 6, -554.941),
+	[2] = Vector3.new(994.426, 25, -1298.539),
+	[3] = Vector3.new(1089.199, 8, -338.105),
+	[4] = Vector3.new(1766.484, -39.200, -152.09),
+	[5] = Vector3.new(644.5, 5.600, -192),
+	[6] = Vector3.new(929, 24.700, -1383),
+	[7] = Vector3.new(1737.011, 14, -735.9),
+	[8] = Vector3.new(1563.291, -15.500, -836.908),
+	[9] = Vector3.new(911.951, 43.650, -752.54),
+	[10] = Vector3.new(977.0521, 3.900, 342.855),
+	[11] = Vector3.new(347.726, -6, -448.981),
+	[12] = Vector3.new(1617.469, 42.600, -517.965),
+	[13] = Vector3.new(387.048, -3, -1446.362),
+	[14] = Vector3.new(1205.05, 25, -737.808),
+	[15] = Vector3.new(698.569, 147.700, -1178.724),
+	[16] = Vector3.new(287.365, 82.800, -575.788),
+	[17] = Vector3.new(936.074, 88.900, 213.404),
+	[18] = Vector3.new(620.424, 39.750, -90.853),
+	[19] = Vector3.new(1695.184, 8.800, -130.54),
+	[20] = Vector3.new(1086.944, 17.100, -37.837),
+	[21] = Vector3.new(589.08, 28.500, -888.108),
+	[22] = Vector3.new(1137.45, 6, -999.764),
+	[23] = Vector3.new(1846.866, 21.600, -773.932),
+	[24] = Vector3.new(1167.921, 68.200, -448.999),
+	[25] = Vector3.new(1496.655, 52.700, 34.976),
+	[26] = Vector3.new(1011.956, -6.200, 695.93),
+	[27] = Vector3.new(849.683, 742.300, 456.607),
+	[28] = Vector3.new(1145.348, 6, -878.127),
+	[29] = Vector3.new(610.898, -16.730, -68.453),
+	[30] = Vector3.new(540.479, 26.200, -1017.439),
+	[31] = Vector3.new(1056.477, 10, -1353.531),
+	[32] = Vector3.new(928.09, 6.700, -707.289),
+	[33] = Vector3.new(164.749, 14, -159.049),
+	[34] = Vector3.new(973.025, -44.900, -378.727),
+	[35] = Vector3.new(331.878, -122.700, -516.055),
+	[36] = Vector3.new(1355.534, -45.700, -182.79),
+	[37] = Vector3.new(1371.808, 69, -1422.842),
+	[38] = Vector3.new(380.915, 20.500, -1443.573),
+	[39] = Vector3.new(489.577, -79, -1118.979),
+	[40] = Vector3.new(1365.953, -9.600, 497.342),
+	[41] = Vector3.new(384.344, -22.130, -580.555),
+	[42] = Vector3.new(955.457, -92.500, -795.354),
+	[43] = Vector3.new(636.641, -57, -1267.01),
+	[44] = Vector3.new(1241.371, 67.700, 570.692),
+	[45] = Vector3.new(1884, -49, -834.5),
+	[46] = Vector3.new(1102.859, -9.600, 824.711),
+	[47] = Vector3.new(756, -28, -3.402),
+	[48] = Vector3.new(784.144, 7, -666.677),
+	[49] = Vector3.new(316.027, 64.690, 66.164),
+	[50] = Vector3.new(514.122, -22.450, -380.379),
 }
 
 local index = 1
@@ -71,6 +72,7 @@ local function teleportToNext()
 	local root = getRoot()
 	if not root then return end
 	local pos = TELEPORT_POINTS[index]
+	if not pos then return end
 	root.CFrame = CFrame.new(pos)
 	index += 1
 	if index > #TELEPORT_POINTS then
@@ -85,7 +87,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	task.spawn(function()
 		local t0 = os.clock()
 		while UserInputService:IsKeyDown(Enum.KeyCode.E) do
-			if os.clock() - t0 >= 3 then
+			if os.clock() - t0 >= HOLD_SECONDS then
 				teleportToNext()
 				break
 			end
