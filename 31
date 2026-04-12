@@ -141,7 +141,8 @@ local teleportMenu
 
 local eChain50Active = false
 local eChain50NextIndex = 1
-local eHold50Token = 0
+local eHold50Accum = 0
+local eHold50NeedRelease = false
 
 local function teleportToPoint(index)
     local point = teleportPoints[index]
@@ -474,28 +475,37 @@ userInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
-userInputService.InputBegan:Connect(function(input, processed)
-    if not UI.Enabled or not eChain50Active then return end
-    if processed then return end
-    if userInputService:GetFocusedTextBox() then return end
-    if input.KeyCode ~= Enum.KeyCode.E then return end
+runService.Heartbeat:Connect(function(dt)
+    if not UI.Enabled or not eChain50Active then
+        eHold50Accum = 0
+        eHold50NeedRelease = false
+        return
+    end
+    if userInputService:GetFocusedTextBox() then
+        eHold50Accum = 0
+        return
+    end
 
-    eHold50Token += 1
-    local token = eHold50Token
-    task.delay(3, function()
-        if token ~= eHold50Token then return end
-        if not eChain50Active or not UI.Enabled then return end
-        if not userInputService:IsKeyDown(Enum.KeyCode.E) then return end
-        if userInputService:GetFocusedTextBox() then return end
+    local eDown = userInputService:IsKeyDown(Enum.KeyCode.E)
 
-        teleportToPoint(eChain50NextIndex)
-        eChain50NextIndex = eChain50NextIndex % 50 + 1
-    end)
-end)
+    if eHold50NeedRelease then
+        if not eDown then
+            eHold50NeedRelease = false
+            eHold50Accum = 0
+        end
+        return
+    end
 
-userInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.E then
-        eHold50Token += 1
+    if eDown then
+        eHold50Accum += dt
+        if eHold50Accum >= 3 then
+            eHold50Accum = 0
+            eHold50NeedRelease = true
+            teleportToPoint(eChain50NextIndex)
+            eChain50NextIndex = eChain50NextIndex % 50 + 1
+        end
+    else
+        eHold50Accum = 0
     end
 end)
 
@@ -505,7 +515,8 @@ end
 
 local function toggleEChain50()
     eChain50Active = not eChain50Active
-    eHold50Token += 1
+    eHold50Accum = 0
+    eHold50NeedRelease = false
     if eChain50Active then
         eChain50NextIndex = 1
     end
