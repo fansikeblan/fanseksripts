@@ -90,6 +90,6 @@ task.wait(0.5)
 
 for _, pos in ipairs(POINTS) do
 	teleportTo(pos)
-	task.wait(0.15) -- чуть дать миру применить позицию
+	task.wait(1) -- секунда после телепорта перед зажатием E
 	holdKeyE(1)
 end
