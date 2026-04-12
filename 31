@@ -1,11 +1,12 @@
 --[[
-	Клиентский скрипт (LocalScript): бесконечный телепорт по точкам, пока зажата E.
-	Зажмите E — маршрут крутится по кругу; отпустите E — остановка.
+	Клиентский скрипт (LocalScript): телепорт по точкам + удержание E 1 сек на каждой.
+	Позиция удерживается каждый кадр до перехода к следующей точке.
 	Положите в StarterPlayerScripts или туда, где у вас выполняется локальный Lua.
 ]]
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
 
@@ -70,38 +71,33 @@ local function getHumanoidRootPart()
 	return character:FindFirstChild("HumanoidRootPart")
 end
 
-local function teleportTo(position)
-	local hrp = getHumanoidRootPart()
-	if hrp then
-		hrp.CFrame = CFrame.new(position)
-	end
+-- Пока выполняется callback, каждый кадр фиксируем позицию на `position`
+local function whileAtPoint(position, callback)
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		local hrp = getHumanoidRootPart()
+		if hrp then
+			hrp.CFrame = CFrame.new(position)
+		end
+	end)
+	callback()
+	conn:Disconnect()
 end
 
-local function isEHeld()
-	return UserInputService:IsKeyDown(Enum.KeyCode.E)
+local function holdKeyE(seconds)
+	VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+	task.wait(seconds)
+	VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
 end
 
--- Ожидание персонажа перед стартом
 if not player.Character then
 	player.CharacterAdded:Wait()
 end
 task.wait(0.5)
 
--- Старт после того, как зажали E (иначе цикл сразу завершится)
-repeat
-	task.wait()
-until isEHeld()
-
-while isEHeld() do
-	for _, pos in ipairs(POINTS) do
-		if not isEHeld() then
-			break
-		end
-		teleportTo(pos)
+for _, pos in ipairs(POINTS) do
+	whileAtPoint(pos, function()
 		task.wait(1)
-		if not isEHeld() then
-			break
-		end
-		task.wait(1) -- удержание E для взаимодействия в игре (клавиша уже зажата)
-	end
+		holdKeyE(1)
+	end)
 end
