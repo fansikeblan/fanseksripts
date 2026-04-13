@@ -1,0 +1,121 @@
+--[[
+	Клиентский скрипт (LocalScript): телепорт по точкам + удержание E 1 сек на каждой.
+	Позиция удерживается каждый кадр до перехода к следующей точке.
+	При запуске камера ставится в заданное положение.
+	Положите в StarterPlayerScripts или туда, где у вас выполняется локальный Lua.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local POINTS = {
+	Vector3.new(1024.077, 6, -554.941),
+	Vector3.new(994.426, 25, -1298.539),
+	Vector3.new(1089.199, 8, -338.105),
+	Vector3.new(1766.484, -39.200, -152.09),
+	Vector3.new(644.5, 5.600, -192),
+	Vector3.new(929, 24.700, -1383),
+	Vector3.new(1737.011, 14, -735.9),
+	Vector3.new(1563.291, -15.500, -836.908),
+	Vector3.new(911.951, 43.650, -752.54),
+	Vector3.new(977.0521, 3.900, 342.855),
+	Vector3.new(347.726, -6, -448.981),
+	Vector3.new(1617.469, 42.600, -517.965),
+	Vector3.new(387.048, -3, -1446.362),
+	Vector3.new(1205.05, 25, -737.808),
+	Vector3.new(698.569, 147.700, -1178.724),
+	Vector3.new(287.365, 82.800, -575.788),
+	Vector3.new(936.074, 88.900, 213.404),
+	Vector3.new(620.424, 39.750, -90.853),
+	Vector3.new(1695.184, 8.800, -130.54),
+	Vector3.new(1086.944, 17.100, -37.837),
+	Vector3.new(589.08, 28.500, -888.108),
+	Vector3.new(1137.45, 6, -999.764),
+	Vector3.new(1846.866, 21.600, -773.932),
+	Vector3.new(1167.921, 68.200, -448.999),
+	Vector3.new(1496.655, 52.700, 34.976),
+	Vector3.new(1011.956, -6.200, 695.93),
+	Vector3.new(849.683, 742.300, 456.607),
+	Vector3.new(1145.348, 6, -878.127),
+	Vector3.new(610.898, -16.730, -68.453),
+	Vector3.new(540.479, 26.200, -1017.439),
+	Vector3.new(1056.477, 10, -1353.531),
+	Vector3.new(928.09, 6.700, -707.289),
+	Vector3.new(164.749, 14, -159.049),
+	Vector3.new(973.025, -44.900, -378.727),
+	Vector3.new(331.878, -122.700, -516.055),
+	Vector3.new(1355.534, -45.700, -182.79),
+	Vector3.new(1371.808, 69, -1422.842),
+	Vector3.new(380.915, 20.500, -1443.573),
+	Vector3.new(489.577, -79, -1118.979),
+	Vector3.new(1365.953, -9.600, 497.342),
+	Vector3.new(384.344, -22.130, -580.555),
+	Vector3.new(955.457, -92.500, -795.354),
+	Vector3.new(636.641, -57, -1267.01),
+	Vector3.new(1241.371, 67.700, 570.692),
+	Vector3.new(1884, -49, -834.5),
+	Vector3.new(1102.859, -9.600, 824.711),
+	Vector3.new(756, -28, -3.402),
+	Vector3.new(784.144, 7, -666.677),
+	Vector3.new(316.027, 64.690, 66.164),
+	Vector3.new(514.122, -22.450, -380.379),
+}
+
+local function setStartCamera()
+	if not camera then
+		return
+	end
+
+	local targetCFrame =
+		CFrame.new(510.925, -23.369, -369.229)
+		* CFrame.Angles(math.rad(67.742), math.rad(-76.690), math.rad(0.000))
+
+	camera.CameraType = Enum.CameraType.Scriptable
+	camera.CFrame = targetCFrame
+end
+
+local function getHumanoidRootPart()
+	local character = player.Character
+	if not character then
+		return nil
+	end
+	return character:FindFirstChild("HumanoidRootPart")
+end
+
+-- Пока выполняется callback, каждый кадр фиксируем позицию на `position`
+local function whileAtPoint(position, callback)
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		local hrp = getHumanoidRootPart()
+		if hrp then
+			hrp.CFrame = CFrame.new(position)
+		end
+	end)
+
+	callback()
+	conn:Disconnect()
+end
+
+local function holdKeyE(seconds)
+	VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+	task.wait(seconds)
+	VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+end
+
+if not player.Character then
+	player.CharacterAdded:Wait()
+end
+task.wait(0.5)
+
+setStartCamera()
+
+for _, pos in ipairs(POINTS) do
+	whileAtPoint(pos, function()
+		task.wait(1)
+		holdKeyE(1)
+	end)
+end
