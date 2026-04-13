@@ -65,10 +65,8 @@ local POINTS = {
 	Vector3.new(514.122, -22.450, -380.379),
 }
 
-local START_CAMERA_CFRAME =
-	CFrame.new(515.691, -23.724, -379.553) *
-	CFrame.Angles(math.rad(58.565), math.rad(62.240), math.rad(0.000))
-
+local START_CAMERA_POS = Vector3.new(785.745, 6.035, -666.443)
+local START_CAMERA_LOOK = Vector3.new(-0.49991, 0.86298, -0.07320)
 local START_ZOOM = 3.401
 
 local function getHumanoidRootPart()
@@ -88,7 +86,7 @@ local function setupStartCamera()
 	player.CameraMaxZoomDistance = START_ZOOM
 
 	camera.CameraType = Enum.CameraType.Scriptable
-	camera.CFrame = START_CAMERA_CFRAME
+	camera.CFrame = CFrame.lookAt(START_CAMERA_POS, START_CAMERA_POS + START_CAMERA_LOOK)
 end
 
 -- Пока выполняется callback, каждый кадр фиксируем позицию на `position`
