@@ -1,7 +1,7 @@
 --[[
 	Клиентский скрипт (LocalScript): телепорт по точкам + удержание E 1 сек на каждой.
 	Позиция удерживается каждый кадр до перехода к следующей точке.
-	При запуске камера ставится в заданное положение.
+	При запуске камера ставится в заданное положение и заданное приближение.
 	Положите в StarterPlayerScripts или туда, где у вас выполняется локальный Lua.
 ]]
 
@@ -11,6 +11,8 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
+
+local START_ZOOM_DISTANCE = 3.939
 
 local POINTS = {
 	Vector3.new(1024.077, 6, -554.941),
@@ -76,6 +78,7 @@ local function setStartCamera()
 
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.CFrame = targetCFrame
+	camera.Focus = targetCFrame * CFrame.new(0, 0, -START_ZOOM_DISTANCE)
 end
 
 local function getHumanoidRootPart()
