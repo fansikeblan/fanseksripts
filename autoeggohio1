@@ -1,7 +1,7 @@
 --[[
 	Клиентский скрипт (LocalScript): телепорт по точкам + удержание E 1 сек на каждой.
 	Позиция удерживается каждый кадр до перехода к следующей точке.
-	При запуске камера ставится в заданное положение и заданное приближение.
+	При запуске камера ставится в заданное положение и зум фиксируется на 3.401.
 	Положите в StarterPlayerScripts или туда, где у вас выполняется локальный Lua.
 ]]
 
@@ -11,8 +11,6 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
-
-local START_ZOOM_DISTANCE = 3.939
 
 local POINTS = {
 	Vector3.new(1024.077, 6, -554.941),
@@ -67,19 +65,11 @@ local POINTS = {
 	Vector3.new(514.122, -22.450, -380.379),
 }
 
-local function setStartCamera()
-	if not camera then
-		return
-	end
+local START_CAMERA_CFRAME =
+	CFrame.new(515.691, -23.724, -379.553) *
+	CFrame.Angles(math.rad(58.565), math.rad(62.240), math.rad(0.000))
 
-	local targetCFrame =
-		CFrame.new(913.554, 41.879, -751.042)
-		* CFrame.Angles(math.rad(56.146), math.rad(46.941), math.rad(0.000))
-
-	camera.CameraType = Enum.CameraType.Scriptable
-	camera.CFrame = targetCFrame
-	camera.Focus = targetCFrame * CFrame.new(0, 0, -START_ZOOM_DISTANCE)
-end
+local START_ZOOM = 3.401
 
 local function getHumanoidRootPart()
 	local character = player.Character
@@ -87,6 +77,18 @@ local function getHumanoidRootPart()
 		return nil
 	end
 	return character:FindFirstChild("HumanoidRootPart")
+end
+
+local function setupStartCamera()
+	if not camera then
+		return
+	end
+
+	player.CameraMinZoomDistance = START_ZOOM
+	player.CameraMaxZoomDistance = START_ZOOM
+
+	camera.CameraType = Enum.CameraType.Scriptable
+	camera.CFrame = START_CAMERA_CFRAME
 end
 
 -- Пока выполняется callback, каждый кадр фиксируем позицию на `position`
@@ -114,7 +116,7 @@ if not player.Character then
 end
 task.wait(0.5)
 
-setStartCamera()
+setupStartCamera()
 
 for _, pos in ipairs(POINTS) do
 	whileAtPoint(pos, function()
