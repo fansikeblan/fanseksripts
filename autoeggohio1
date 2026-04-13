@@ -71,8 +71,8 @@ local function setStartCamera()
 	end
 
 	local targetCFrame =
-		CFrame.new(510.925, -23.369, -369.229)
-		* CFrame.Angles(math.rad(67.742), math.rad(-76.690), math.rad(0.000))
+		CFrame.new(913.554, 41.879, -751.042)
+		* CFrame.Angles(math.rad(56.146), math.rad(46.941), math.rad(0.000))
 
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.CFrame = targetCFrame
